@@ -167,6 +167,9 @@ export default function App() {
             error={error} 
             onNavigate={handleTabChange}
             API_URL={API_URL}
+            products={products}
+            customers={customers}
+            orders={orders}
           />
         )}
 

@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
 
-export default function Dashboard({ stats, loading, error, onNavigate, API_URL }) {
+export default function Dashboard({ stats, loading, error, onNavigate, API_URL, products = [], customers = [], orders = [] }) {
   const [searchId, setSearchId] = useState('');
   const [searchResults, setSearchResults] = useState(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
 
-  const handleSearch = async (e) => {
+  const handleSearch = (e) => {
     e.preventDefault();
-    const id = parseInt(searchId.trim());
-    if (isNaN(id) || id <= 0) {
-      setSearchError('Please enter a valid positive integer ID.');
+    const query = searchId.trim().toLowerCase();
+    if (!query) {
+      setSearchError('Please enter a search query.');
       setSearchResults(null);
       return;
     }
@@ -19,27 +19,36 @@ export default function Dashboard({ stats, loading, error, onNavigate, API_URL }
     setSearchError('');
     setSearchResults(null);
 
-    try {
-      const [prodRes, custRes, ordRes] = await Promise.all([
-        fetch(`${API_URL}/products/${id}`).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch(`${API_URL}/customers/${id}`).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch(`${API_URL}/orders/${id}`).then(r => r.ok ? r.json() : null).catch(() => null)
-      ]);
+    // Support numeric ID lookup by stripping leading '#' if typed (e.g. '#12' -> '12')
+    const cleanIdQuery = query.replace(/^#/, '').trim();
 
-      if (!prodRes && !custRes && !ordRes) {
-        setSearchError(`No Product, Customer, or Order matches found for ID #${id}.`);
-      } else {
-        setSearchResults({
-          product: prodRes,
-          customer: custRes,
-          order: ordRes
-        });
-      }
-    } catch (err) {
-      setSearchError('Error performing ID lookup. Please verify your connection.');
-    } finally {
-      setSearchLoading(false);
+    // 1. Products: search by SKU / Code (case-insensitive substring)
+    const matchingProducts = products.filter(p => 
+      p.sku.toLowerCase().includes(query)
+    );
+
+    // 2. Customers: search by Name (substring) and ID (exact)
+    const matchingCustomers = customers.filter(c => 
+      c.name.toLowerCase().includes(query) || 
+      c.id.toString() === cleanIdQuery
+    );
+
+    // 3. Orders: search by Order ID (exact)
+    const matchingOrders = orders.filter(o => 
+      o.id.toString() === cleanIdQuery
+    );
+
+    if (matchingProducts.length === 0 && matchingCustomers.length === 0 && matchingOrders.length === 0) {
+      setSearchError(`No matches found for "${searchId}". Try searching a different SKU, Name, or ID.`);
+      setSearchResults(null);
+    } else {
+      setSearchResults({
+        products: matchingProducts,
+        customers: matchingCustomers,
+        orders: matchingOrders
+      });
     }
+    setSearchLoading(false);
   };
 
   if (loading) {
@@ -68,7 +77,7 @@ export default function Dashboard({ stats, loading, error, onNavigate, API_URL }
             <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.6 }}>🔍</span>
             <input
               type="text"
-              placeholder="Search by ID across Products, Customers, and Orders (e.g. 1, 2...)"
+              placeholder="Search product SKU, customer name/ID, or order ID..."
               className="form-control"
               style={{ paddingLeft: '2.5rem' }}
               value={searchId}
@@ -76,7 +85,7 @@ export default function Dashboard({ stats, loading, error, onNavigate, API_URL }
             />
           </div>
           <button type="submit" className="btn btn-primary" style={{ minWidth: '120px' }} disabled={searchLoading}>
-            {searchLoading ? 'Searching...' : 'Search ID'}
+            {searchLoading ? 'Searching...' : 'Search'}
           </button>
           {searchResults && (
             <button 
@@ -98,58 +107,58 @@ export default function Dashboard({ stats, loading, error, onNavigate, API_URL }
         {searchResults && (
           <div style={{ marginTop: '1.5rem' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
-              🔎 Results for ID #{searchId}
+              🔎 Results for "{searchId}"
             </h3>
             <div className="dashboard-grid" style={{ marginBottom: '0' }}>
-              {searchResults.product && (
-                <div className="card card-primary" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              {searchResults.products.map((product) => (
+                <div key={`search-prod-${product.id}`} className="card card-primary" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   <div>
                     <div className="card-title">📦 Product Match</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0.5rem 0' }}>{searchResults.product.name}</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0.5rem 0' }}>{product.name}</div>
                     <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                      <div>SKU: <code>{searchResults.product.sku}</code></div>
-                      <div>Price: ₹{searchResults.product.price.toFixed(2)}</div>
-                      <div>Stock: {searchResults.product.quantity} units</div>
+                      <div>SKU: <code>{product.sku}</code></div>
+                      <div>Price: ₹{product.price.toFixed(2)}</div>
+                      <div>Stock: {product.quantity} units</div>
                     </div>
                   </div>
                   <button className="btn btn-secondary btn-sm" style={{ marginTop: '1.25rem', width: '100%' }} onClick={() => onNavigate('products')}>
                     Go to Catalog
                   </button>
                 </div>
-              )}
+              ))}
 
-              {searchResults.customer && (
-                <div className="card card-success" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              {searchResults.customers.map((customer) => (
+                <div key={`search-cust-${customer.id}`} className="card card-success" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   <div>
                     <div className="card-title">👥 Customer Match</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0.5rem 0' }}>{searchResults.customer.name}</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0.5rem 0' }}>{customer.name} (ID: #{customer.id})</div>
                     <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                      <div>Email: {searchResults.customer.email}</div>
-                      <div>Phone: {searchResults.customer.phone || 'Not provided'}</div>
+                      <div>Email: {customer.email}</div>
+                      <div>Phone: {customer.phone || 'Not provided'}</div>
                     </div>
                   </div>
                   <button className="btn btn-secondary btn-sm" style={{ marginTop: '1.25rem', width: '100%' }} onClick={() => onNavigate('customers')}>
                     Go to Directory
                   </button>
                 </div>
-              )}
+              ))}
 
-              {searchResults.order && (
-                <div className="card card-info" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              {searchResults.orders.map((order) => (
+                <div key={`search-ord-${order.id}`} className="card card-info" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   <div>
                     <div className="card-title">🛒 Order Match</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0.5rem 0' }}>Order #{searchResults.order.id}</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0.5rem 0' }}>Order #{order.id}</div>
                     <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                      <div>Customer: {searchResults.order.customer?.name || 'Unknown'}</div>
-                      <div>Total Value: ₹{searchResults.order.total_amount.toFixed(2)}</div>
-                      <div>Date: {new Date(searchResults.order.created_at).toLocaleDateString()}</div>
+                      <div>Customer: {order.customer?.name || 'Unknown'}</div>
+                      <div>Total Value: ₹{order.total_amount.toFixed(2)}</div>
+                      <div>Date: {new Date(order.created_at).toLocaleDateString()}</div>
                     </div>
                   </div>
                   <button className="btn btn-secondary btn-sm" style={{ marginTop: '1.25rem', width: '100%' }} onClick={() => onNavigate('orders')}>
                     Go to Orders Register
                   </button>
                 </div>
-              )}
+              ))}
             </div>
           </div>
         )}
