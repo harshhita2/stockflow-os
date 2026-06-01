@@ -17,9 +17,19 @@ export default function OrderList({ orders, products, customers, loading, error,
     setIsWizardOpen(true);
   };
 
-  const openDetails = (order) => {
-    setSelectedOrder(order);
-    setIsDetailsOpen(true);
+  const openDetails = async (order) => {
+    try {
+      const response = await fetch(`${API_URL}/orders/${order.id}`);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || 'Failed to fetch order details.');
+      }
+      const data = await response.json();
+      setSelectedOrder(data);
+      setIsDetailsOpen(true);
+    } catch (err) {
+      showNotification(err.message, 'error');
+    }
   };
 
   const handleAddRow = () => {

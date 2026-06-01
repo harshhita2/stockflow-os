@@ -22,15 +22,25 @@ export default function ProductList({ products, loading, error, onRefresh, showN
     setIsModalOpen(true);
   };
 
-  const openEditModal = (product) => {
-    setName(product.name);
-    setSku(product.sku);
-    setPrice(product.price.toString());
-    setQuantity(product.quantity.toString());
+  const openEditModal = async (product) => {
     setFormError('');
-    setSelectedProductId(product.id);
-    setIsEditMode(true);
-    setIsModalOpen(true);
+    try {
+      const response = await fetch(`${API_URL}/products/${product.id}`);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || 'Failed to fetch product details.');
+      }
+      const data = await response.json();
+      setName(data.name);
+      setSku(data.sku);
+      setPrice(data.price.toString());
+      setQuantity(data.quantity.toString());
+      setSelectedProductId(data.id);
+      setIsEditMode(true);
+      setIsModalOpen(true);
+    } catch (err) {
+      showNotification(err.message, 'error');
+    }
   };
 
   const handleSubmit = async (e) => {
