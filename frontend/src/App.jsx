@@ -166,6 +166,7 @@ export default function App() {
             loading={loading} 
             error={error} 
             onNavigate={handleTabChange}
+            API_URL={API_URL}
           />
         )}
 

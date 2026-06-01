@@ -1,6 +1,47 @@
-import React from 'react';
+import React, { useState } from 'react';
 
-export default function Dashboard({ stats, loading, error, onNavigate }) {
+export default function Dashboard({ stats, loading, error, onNavigate, API_URL }) {
+  const [searchId, setSearchId] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
+
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    const id = parseInt(searchId.trim());
+    if (isNaN(id) || id <= 0) {
+      setSearchError('Please enter a valid positive integer ID.');
+      setSearchResults(null);
+      return;
+    }
+
+    setSearchLoading(true);
+    setSearchError('');
+    setSearchResults(null);
+
+    try {
+      const [prodRes, custRes, ordRes] = await Promise.all([
+        fetch(`${API_URL}/products/${id}`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`${API_URL}/customers/${id}`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`${API_URL}/orders/${id}`).then(r => r.ok ? r.json() : null).catch(() => null)
+      ]);
+
+      if (!prodRes && !custRes && !ordRes) {
+        setSearchError(`No Product, Customer, or Order matches found for ID #${id}.`);
+      } else {
+        setSearchResults({
+          product: prodRes,
+          customer: custRes,
+          order: ordRes
+        });
+      }
+    } catch (err) {
+      setSearchError('Error performing ID lookup. Please verify your connection.');
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
   if (loading) {
     return <div style={{ textAlign: 'center', padding: '3rem' }}>Loading Dashboard Stats...</div>;
   }
@@ -18,6 +59,100 @@ export default function Dashboard({ stats, loading, error, onNavigate }) {
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '0.25rem' }}>Dashboard Overview</h1>
         <p style={{ color: 'var(--text-secondary)' }}>Real-time inventory and customer order insights.</p>
+      </div>
+
+      {/* Global ID Search Bar */}
+      <div className="panel" style={{ padding: '1.5rem', marginBottom: '2rem', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.6 }}>🔍</span>
+            <input
+              type="text"
+              placeholder="Search by ID across Products, Customers, and Orders (e.g. 1, 2...)"
+              className="form-control"
+              style={{ paddingLeft: '2.5rem' }}
+              value={searchId}
+              onChange={(e) => setSearchId(e.target.value)}
+            />
+          </div>
+          <button type="submit" className="btn btn-primary" style={{ minWidth: '120px' }} disabled={searchLoading}>
+            {searchLoading ? 'Searching...' : 'Search ID'}
+          </button>
+          {searchResults && (
+            <button 
+              type="button" 
+              className="btn btn-secondary" 
+              onClick={() => { setSearchResults(null); setSearchId(''); }}
+            >
+              Clear
+            </button>
+          )}
+        </form>
+
+        {searchError && (
+          <div className="alert alert-error" style={{ marginTop: '1rem', marginBottom: '0', padding: '0.75rem 1rem', fontSize: '0.9rem' }}>
+            <span>{searchError}</span>
+          </div>
+        )}
+
+        {searchResults && (
+          <div style={{ marginTop: '1.5rem' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
+              🔎 Results for ID #{searchId}
+            </h3>
+            <div className="dashboard-grid" style={{ marginBottom: '0' }}>
+              {searchResults.product && (
+                <div className="card card-primary" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div>
+                    <div className="card-title">📦 Product Match</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0.5rem 0' }}>{searchResults.product.name}</div>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                      <div>SKU: <code>{searchResults.product.sku}</code></div>
+                      <div>Price: ₹{searchResults.product.price.toFixed(2)}</div>
+                      <div>Stock: {searchResults.product.quantity} units</div>
+                    </div>
+                  </div>
+                  <button className="btn btn-secondary btn-sm" style={{ marginTop: '1.25rem', width: '100%' }} onClick={() => onNavigate('products')}>
+                    Go to Catalog
+                  </button>
+                </div>
+              )}
+
+              {searchResults.customer && (
+                <div className="card card-success" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div>
+                    <div className="card-title">👥 Customer Match</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0.5rem 0' }}>{searchResults.customer.name}</div>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                      <div>Email: {searchResults.customer.email}</div>
+                      <div>Phone: {searchResults.customer.phone || 'Not provided'}</div>
+                    </div>
+                  </div>
+                  <button className="btn btn-secondary btn-sm" style={{ marginTop: '1.25rem', width: '100%' }} onClick={() => onNavigate('customers')}>
+                    Go to Directory
+                  </button>
+                </div>
+              )}
+
+              {searchResults.order && (
+                <div className="card card-info" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div>
+                    <div className="card-title">🛒 Order Match</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0.5rem 0' }}>Order #{searchResults.order.id}</div>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                      <div>Customer: {searchResults.order.customer?.name || 'Unknown'}</div>
+                      <div>Total Value: ₹{searchResults.order.total_amount.toFixed(2)}</div>
+                      <div>Date: {new Date(searchResults.order.created_at).toLocaleDateString()}</div>
+                    </div>
+                  </div>
+                  <button className="btn btn-secondary btn-sm" style={{ marginTop: '1.25rem', width: '100%' }} onClick={() => onNavigate('orders')}>
+                    Go to Orders Register
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="dashboard-grid">
